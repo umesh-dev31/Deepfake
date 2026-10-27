@@ -7,29 +7,40 @@ from PIL import Image
 import io
 import tensorflow as tf
 from fpdf import FPDF
+from pathlib import Path
+import tempfile
+
+PROJECT_DIR = Path(__file__).resolve().parent
 
 def load_css(file_name):
     with open(file_name) as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 # Load CSS
-load_css(r"G:\final Audiodeepfake\style_all.css")
+load_css(PROJECT_DIR / "style_all.css")
 
 # Load model
-model = tf.keras.models.load_model("G:/final Audiodeepfake/cnn_model_smaller.keras")
+model = tf.keras.models.load_model(PROJECT_DIR / "cnn_model_smaller.keras")
 
 st.title("🔍 Audio Deepfake Detection (Forensic Tool)")
-st.write("Upload an audio file (wav/mp3) and the system will analyze it for authenticity.")
+st.write("Upload an audio file (wav/mp3/ogg) and the system will analyze it for authenticity.")
 
 # Upload audio
-audio_file = st.file_uploader("Upload audio file (wav/mp3)", type=["wav", "mp3"])
+audio_file = st.file_uploader("Upload audio file (wav/mp3/ogg)", type=["wav", "mp3", "ogg"])
 
 if audio_file is not None:
-    st.audio(audio_file)
+    audio_bytes = audio_file.getvalue()
+    file_extension = Path(audio_file.name).suffix.lower()
+    audio_format = {
+        ".wav": "audio/wav",
+        ".mp3": "audio/mp3",
+        ".ogg": "audio/ogg",
+    }[file_extension]
+    st.audio(audio_bytes, format=audio_format)
 
     with st.spinner("Processing audio and generating spectrogram..."):
         # Load audio
-        y, sr = librosa.load(audio_file, sr=None, duration=5)
+        y, sr = librosa.load(io.BytesIO(audio_bytes), sr=None, duration=5)
 
         # Generate spectrogram
         S = librosa.feature.melspectrogram(y=y, sr=sr)
@@ -45,7 +56,7 @@ if audio_file is not None:
         buf.seek(0)
         plt.close(fig)
 
-        st.image(buf, caption="Generated Spectrogram", use_column_width=True)
+        st.image(buf, caption="Generated Spectrogram", use_container_width=True)
 
         # Prepare image for model
         img = Image.open(buf).convert('RGB').resize((128, 128))
@@ -89,8 +100,9 @@ if audio_file is not None:
             pdf.image(temp_img, w=150)
 
             # Save and download
-            pdf_buf = io.BytesIO()
-            pdf.output(pdf_buf)
-            pdf_buf.seek(0)
+            with tempfile.TemporaryDirectory() as temp_dir:
+                pdf_path = Path(temp_dir) / "deepfake_report.pdf"
+                pdf.output(str(pdf_path))
+                pdf_bytes = pdf_path.read_bytes()
 
-            st.download_button("Download PDF Report", data=pdf_buf, file_name="deepfake_report.pdf", mime="application/pdf")
+            st.download_button("Download PDF Report", data=pdf_bytes, file_name="deepfake_report.pdf", mime="application/pdf")

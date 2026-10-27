@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import shap
 from fpdf import FPDF
 from PIL import Image
-import io
+from pathlib import Path
+import tempfile
 
 def load_css(file_name):
     with open(file_name) as f:
@@ -26,7 +27,7 @@ uploaded_file = st.file_uploader("Upload spectrogram image (PNG/JPG)", type=["pn
 
 if uploaded_file is not None:
     # Display uploaded image
-    st.image(uploaded_file, caption="Uploaded Spectrogram", use_column_width=True)
+    st.image(uploaded_file, caption="Uploaded Spectrogram", use_container_width=True)
 
     # Preprocess image
     img = Image.open(uploaded_file).convert('RGB').resize((128, 128))
@@ -69,8 +70,9 @@ if uploaded_file is not None:
         pdf.ln(5)
         pdf.image(temp_img, w=150)
 
-        pdf_buf = io.BytesIO()
-        pdf.output(pdf_buf)
-        pdf_buf.seek(0)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pdf_path = Path(temp_dir) / "deepfake_report.pdf"
+            pdf.output(str(pdf_path))
+            pdf_bytes = pdf_path.read_bytes()
 
-        st.download_button("Download PDF Report", data=pdf_buf, file_name="deepfake_report.pdf", mime="application/pdf")
+        st.download_button("Download PDF Report", data=pdf_bytes, file_name="deepfake_report.pdf", mime="application/pdf")
